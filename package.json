@@ -16,6 +16,7 @@
     "express": "^5.2.1",
     "modesl": "^1.2.1",
     "socket.io": "^4.8.3",
+    "socks": "^2.8.9",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
