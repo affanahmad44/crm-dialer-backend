@@ -13,7 +13,7 @@ COPY package*.json ./
 
 RUN npm install
 
-COPY test/tailscale-test.js ./
+COPY test/tailscale-esl-test.js ./
 
 COPY start-tailscale-test.sh ./
 

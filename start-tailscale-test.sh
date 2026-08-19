@@ -28,6 +28,6 @@ tailscale up \
 echo "Tailscale status:"
 tailscale status
 
-echo "Starting TCP bridge..."
+echo "Starting ESL test..."
 
-exec node /app/tailscale-test.js
+exec node /app/tailscale-esl-test.js
