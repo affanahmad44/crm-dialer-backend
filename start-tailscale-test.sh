@@ -13,27 +13,35 @@ fi
 
 echo "TS_AUTHKEY is configured."
 
+SOCKET="/var/run/tailscale/tailscaled.sock"
+
 tailscaled \
     --tun=userspace-networking \
     --socks5-server=127.0.0.1:1055 \
+    --socket="${SOCKET}" \
     --state=/var/lib/tailscale/tailscaled.state &
 
 TAILSCALED_PID=$!
 
 echo "tailscaled started with PID: ${TAILSCALED_PID}"
 
-echo "Waiting for Tailscale daemon..."
+echo "Waiting for Tailscale LocalAPI socket..."
 
 READY=0
 
 for i in $(seq 1 30); do
 
-    echo "Tailscale readiness check ${i}/30..."
+    echo "LocalAPI readiness check ${i}/30..."
 
-    if tailscale status >/dev/null 2>&1; then
-        echo "Tailscale daemon is ready."
+    if [ -S "${SOCKET}" ]; then
+        echo "Tailscale LocalAPI socket is ready."
         READY=1
         break
+    fi
+
+    if ! kill -0 "${TAILSCALED_PID}" 2>/dev/null; then
+        echo "ERROR: tailscaled process exited."
+        exit 1
     fi
 
     sleep 1
@@ -42,14 +50,12 @@ done
 
 if [ "${READY}" -ne 1 ]; then
 
-    echo "ERROR: Tailscale daemon did not become ready."
-
-    echo "Checking tailscaled process..."
+    echo "ERROR: Tailscale LocalAPI socket did not become ready."
 
     if kill -0 "${TAILSCALED_PID}" 2>/dev/null; then
         echo "tailscaled process is still running."
     else
-        echo "ERROR: tailscaled process has exited."
+        echo "tailscaled process has exited."
     fi
 
     exit 1
@@ -59,7 +65,9 @@ echo "================================"
 echo "Authenticating Tailscale"
 echo "================================"
 
-tailscale up \
+tailscale \
+    --socket="${SOCKET}" \
+    up \
     --auth-key="${TS_AUTHKEY}" \
     --hostname="render-tailscale-esl-test"
 
@@ -67,7 +75,9 @@ echo "================================"
 echo "Tailscale status"
 echo "================================"
 
-tailscale status
+tailscale \
+    --socket="${SOCKET}" \
+    status
 
 echo "================================"
 echo "Starting raw SOCKS5 ESL test"
