@@ -1,130 +1,113 @@
 const net = require("net");
-const modesl = require("modesl");
-const { SocksClient } = require("socks");
-
-const TARGET_HOST = "100.88.225.6";
-const TARGET_PORT = 8021;
 
 const SOCKS_HOST = "127.0.0.1";
 const SOCKS_PORT = 1055;
 
-const LOCAL_HOST = "127.0.0.1";
-const LOCAL_PORT = 8021;
-
-const PASSWORD = process.env.FS_PASSWORD;
+const TARGET_HOST = "100.88.225.6";
+const TARGET_PORT = 8021;
 
 console.log("================================");
-console.log("Tailscale + FreeSWITCH ESL test");
+console.log("RAW Tailscale SOCKS5 TEST");
 console.log("================================");
 
-if (!PASSWORD) {
-    console.error("FS_PASSWORD is not configured");
-    process.exit(1);
-}
+console.log(`SOCKS5 proxy: ${SOCKS_HOST}:${SOCKS_PORT}`);
+console.log(`Target: ${TARGET_HOST}:${TARGET_PORT}`);
 
-console.log(`FreeSWITCH target: ${TARGET_HOST}:${TARGET_PORT}`);
-console.log(`Tailscale SOCKS5: ${SOCKS_HOST}:${SOCKS_PORT}`);
-console.log(`Local ESL bridge: ${LOCAL_HOST}:${LOCAL_PORT}`);
+const socket = net.createConnection(
+    {
+        host: SOCKS_HOST,
+        port: SOCKS_PORT
+    },
+    () => {
 
-// --------------------------------------------------
-// TCP bridge:
-// local TCP -> Tailscale SOCKS5 -> FreeSWITCH
-// --------------------------------------------------
+        console.log("Connected to Tailscale SOCKS5 proxy");
 
-const bridge = net.createServer(async clientSocket => {
+        // SOCKS5 greeting:
+        // Version = 5
+        // Number of authentication methods = 1
+        // Method = 0 (no authentication)
 
-    console.log("Incoming ESL connection to local bridge");
+        const greeting = Buffer.from([
+            0x05,
+            0x01,
+            0x00
+        ]);
 
-    try {
+        console.log("Sending SOCKS5 greeting:");
+        console.log(greeting.toString("hex"));
 
-        const { socket: remoteSocket } =
-            await SocksClient.createConnection({
-                proxy: {
-                    host: SOCKS_HOST,
-                    port: SOCKS_PORT,
-                    type: 5
-                },
-                command: "connect",
-                destination: {
-                    host: TARGET_HOST,
-                    port: TARGET_PORT
-                }
-            });
+        socket.write(greeting);
+    }
+);
 
-        console.log(
-            `Bridge connected through Tailscale to ${TARGET_HOST}:${TARGET_PORT}`
-        );
+socket.on("data", data => {
 
-        clientSocket.pipe(remoteSocket);
-        remoteSocket.pipe(clientSocket);
+    console.log("Received from Tailscale:");
+    console.log("HEX:", data.toString("hex"));
+    console.log("ASCII:", data.toString("ascii"));
 
-        remoteSocket.on("error", err => {
-            console.error("Remote socket error:", err.message);
-            clientSocket.destroy();
-        });
+    if (data.length >= 2 && data[0] === 0x05) {
 
-        clientSocket.on("error", err => {
-            console.error("Local socket error:", err.message);
-            remoteSocket.destroy();
-        });
+        console.log("SUCCESS: Tailscale responded with SOCKS5 version 5");
 
-        remoteSocket.on("close", () => {
-            clientSocket.destroy();
-        });
+        if (data[1] === 0x00) {
 
-        clientSocket.on("close", () => {
-            remoteSocket.destroy();
-        });
+            console.log("SUCCESS: No-authentication method accepted");
 
-    } catch (error) {
+            // Build SOCKS5 CONNECT request for IPv4 100.88.225.6:8021
 
-        console.error(
-            "Tailscale bridge error:",
-            error.message
-        );
+            const target = TARGET_HOST.split(".").map(Number);
 
-        clientSocket.destroy();
+            const request = Buffer.from([
+                0x05, // SOCKS5
+                0x01, // CONNECT
+                0x00, // reserved
+                0x01, // IPv4
+
+                ...target,
+
+                (TARGET_PORT >> 8) & 0xff,
+                TARGET_PORT & 0xff
+            ]);
+
+            console.log("Sending SOCKS5 CONNECT request:");
+            console.log(request.toString("hex"));
+
+            socket.write(request);
+
+        } else {
+
+            console.error(
+                `SOCKS5 authentication method rejected: 0x${data[1].toString(16)}`
+            );
+
+            socket.destroy();
+        }
+
+    } else {
+
+        console.error("Unexpected SOCKS response.");
+
+        socket.destroy();
     }
 });
 
-bridge.listen(LOCAL_PORT, LOCAL_HOST, () => {
+socket.on("error", err => {
 
-    console.log(
-        `ESL bridge listening on ${LOCAL_HOST}:${LOCAL_PORT}`
-    );
-
-    // --------------------------------------------------
-    // Now modesl connects to the LOCAL bridge.
-    // The bridge handles Tailscale.
-    // --------------------------------------------------
-
-    console.log("Starting modesl ESL client...");
-
-    const connection = new modesl.Connection(
-        LOCAL_HOST,
-        LOCAL_PORT,
-        PASSWORD,
-        () => {
-
-            console.log("================================");
-            console.log("SUCCESS: Connected to FreeSWITCH ESL");
-            console.log("================================");
-
-            connection.api("status", response => {
-
-                console.log("FreeSWITCH response:");
-                console.log(response.getBody());
-
-                process.exit(0);
-            });
-        }
-    );
-
-    connection.on("error", err => {
-        console.error("ESL ERROR:", err);
-    });
-
-    connection.on("esl::end", () => {
-        console.log("ESL connection ended");
-    });
+    console.error("SOCKET ERROR:", err.message);
 });
+
+socket.on("close", () => {
+
+    console.log("Socket closed");
+});
+
+setTimeout(() => {
+
+    console.error("TIMEOUT: SOCKS5 test did not complete.");
+
+    socket.destroy();
+
+    process.exit(1);
+
+}, 15000);
