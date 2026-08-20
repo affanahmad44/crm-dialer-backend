@@ -80,6 +80,22 @@ tailscale \
     status
 
 echo "================================"
+echo "Testing Tailscale connectivity"
+echo "================================"
+
+echo "Target: 100.88.225.6"
+
+tailscale \
+    --socket="${SOCKET}" \
+    ping \
+    --timeout=10s \
+    100.88.225.6
+
+echo "================================"
+echo "Tailscale connectivity test passed"
+echo "================================"
+
+echo "================================"
 echo "Starting raw SOCKS5 ESL test"
 echo "================================"
 
