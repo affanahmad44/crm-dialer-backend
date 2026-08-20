@@ -1,4 +1,4 @@
-const net = require("net");
+const { SocksClient } = require("socks");
 
 const SOCKS_HOST = "127.0.0.1";
 const SOCKS_PORT = 1055;
@@ -6,173 +6,134 @@ const SOCKS_PORT = 1055;
 const TARGET_HOST = "100.88.225.6";
 const TARGET_PORT = 8021;
 
+const CONNECTION_TIMEOUT = 15000;
+
 console.log("================================");
-console.log("RAW Tailscale SOCKS5 TEST");
+console.log("Tailscale SOCKS5 → FreeSWITCH ESL TEST");
 console.log("================================");
 
-console.log(`SOCKS5 proxy: ${SOCKS_HOST}:${SOCKS_PORT}`);
-console.log(`Target: ${TARGET_HOST}:${TARGET_PORT}`);
+console.log(`SOCKS5 proxy : ${SOCKS_HOST}:${SOCKS_PORT}`);
+console.log(`ESL target   : ${TARGET_HOST}:${TARGET_PORT}`);
+console.log("================================");
 
-let socksStage = "greeting";
+async function testConnection() {
+    let socket;
 
-const socket = net.createConnection(
-    {
-        host: SOCKS_HOST,
-        port: SOCKS_PORT
-    },
-    () => {
+    try {
+        console.log("");
+        console.log("STEP 1: Connecting through Tailscale SOCKS5...");
+        console.log("");
 
-        console.log("Connected to Tailscale SOCKS5 proxy");
+        const result = await SocksClient.createConnection({
+            proxy: {
+                host: SOCKS_HOST,
+                port: SOCKS_PORT,
+                type: 5
+            },
 
-        // SOCKS5 greeting:
-        // Version = 5
-        // Number of authentication methods = 1
-        // Method = 0 (no authentication)
+            command: "connect",
 
-        const greeting = Buffer.from([
-            0x05,
-            0x01,
-            0x00
-        ]);
+            destination: {
+                host: TARGET_HOST,
+                port: TARGET_PORT
+            },
 
-        console.log("Sending SOCKS5 greeting:");
-        console.log(greeting.toString("hex"));
+            timeout: CONNECTION_TIMEOUT
+        });
 
-        socket.write(greeting);
-    }
-);
+        socket = result.socket;
 
-socket.on("data", data => {
+        console.log("================================");
+        console.log("SUCCESS: SOCKS5 CONNECT completed");
+        console.log("================================");
 
-    console.log("================================");
-    console.log(`SOCKS DATA RECEIVED [stage=${socksStage}]`);
-    console.log("Length:", data.length);
-    console.log("HEX:", data.toString("hex"));
-    console.log("ASCII:", data.toString("ascii"));
-    console.log("================================");
+        console.log(`Proxy: ${SOCKS_HOST}:${SOCKS_PORT}`);
+        console.log(`Target: ${TARGET_HOST}:${TARGET_PORT}`);
 
-    // --------------------------------------------------
-    // Stage 1:
-    // SOCKS5 authentication-method negotiation
-    // --------------------------------------------------
+        console.log("");
+        console.log("STEP 2: Waiting for FreeSWITCH ESL greeting...");
+        console.log("");
 
-    if (socksStage === "greeting") {
+        socket.setTimeout(CONNECTION_TIMEOUT);
 
-        if (data.length < 2) {
+        socket.once("data", data => {
 
-            console.log(
-                "Waiting for complete SOCKS5 greeting response..."
-            );
+            console.log("================================");
+            console.log("SUCCESS: DATA RECEIVED FROM FREESWITCH");
+            console.log("================================");
 
-            return;
-        }
+            console.log("Bytes:", data.length);
 
-        if (data[0] !== 0x05) {
+            console.log("");
+            console.log("HEX:");
+            console.log(data.toString("hex"));
+
+            console.log("");
+            console.log("ASCII:");
+            console.log(data.toString("utf8"));
+
+            console.log("");
+            console.log("================================");
+            console.log("SUCCESS: TAILSCALE → ESL PATH WORKS");
+            console.log("================================");
+
+            socket.destroy();
+
+            process.exit(0);
+        });
+
+        socket.on("timeout", () => {
+
+            console.error("");
+            console.error("================================");
+            console.error("ERROR: TIMEOUT WAITING FOR ESL");
+            console.error("================================");
 
             console.error(
-                "Invalid SOCKS5 version:",
-                data[0]
+                `Connected to ${TARGET_HOST}:${TARGET_PORT}, ` +
+                "but FreeSWITCH did not send an ESL response."
             );
 
             socket.destroy();
-            return;
+
+            process.exit(1);
+        });
+
+        socket.on("error", err => {
+
+            console.error("");
+            console.error("================================");
+            console.error("SOCKET ERROR AFTER CONNECT");
+            console.error("================================");
+
+            console.error("Message:", err.message);
+            console.error("Code:", err.code || "N/A");
+
+            process.exit(1);
+        });
+
+    } catch (error) {
+
+        console.error("");
+        console.error("================================");
+        console.error("SOCKS5 CONNECTION FAILED");
+        console.error("================================");
+
+        console.error("Message:", error.message);
+        console.error("Code:", error.code || "N/A");
+        console.error("Name:", error.name || "N/A");
+
+        if (error.options) {
+            console.error("Options:", error.options);
         }
 
-        console.log(
-            "SUCCESS: Tailscale responded with SOCKS5 version 5"
-        );
+        console.error("");
+        console.error("This means the failure occurred while");
+        console.error("connecting through the Tailscale SOCKS5 proxy.");
+        console.error("");
 
-        if (data[1] !== 0x00) {
-
-            console.error(
-                `SOCKS5 authentication method rejected: 0x${data[1].toString(16)}`
-            );
-
-            socket.destroy();
-            return;
-        }
-
-        console.log(
-            "SUCCESS: No-authentication method accepted"
-        );
-
-        // --------------------------------------------------
-        // Build SOCKS5 CONNECT request
-        // Target:
-        // 100.88.225.6:8021
-        // --------------------------------------------------
-
-        const target = TARGET_HOST
-            .split(".")
-            .map(Number);
-
-        const request = Buffer.from([
-            0x05, // SOCKS5
-            0x01, // CONNECT
-            0x00, // reserved
-            0x01, // IPv4
-
-            ...target,
-
-            (TARGET_PORT >> 8) & 0xff,
-            TARGET_PORT & 0xff
-        ]);
-
-        console.log("Sending SOCKS5 CONNECT request:");
-        console.log(request.toString("hex"));
-
-        socksStage = "connect";
-
-        socket.write(request);
-
-        return;
+        process.exit(1);
     }
+}
 
-    // --------------------------------------------------
-    // Stage 2:
-    // SOCKS5 CONNECT response
-    // --------------------------------------------------
-
-    if (socksStage === "connect") {
-
-        console.log("SOCKS5 CONNECT response received.");
-
-        if (data.length >= 2) {
-
-            console.log(
-                "First bytes:",
-                data.subarray(0, 2).toString("hex")
-            );
-        }
-
-        console.log("Remaining connection data:");
-        console.log(data.toString());
-
-        socket.destroy();
-    }
-});
-
-socket.on("error", err => {
-
-    console.error(
-        "SOCKET ERROR:",
-        err.message
-    );
-});
-
-socket.on("close", () => {
-
-    console.log("Socket closed");
-});
-
-setTimeout(() => {
-
-    console.error(
-        "TIMEOUT: SOCKS5 test did not complete."
-    );
-
-    socket.destroy();
-
-    process.exit(1);
-
-}, 15000);
+testConnection();
