@@ -219,7 +219,7 @@ async function main() {
 
         connection.on(
             "esl::event::auth::fail",
-            function() {
+            function(evt) {
                 console.error("");
                 console.error(
                     "========================================"
@@ -230,6 +230,28 @@ async function main() {
                 console.error(
                     "========================================"
                 );
+
+                console.error(
+                    "Password configured:",
+                    FREESWITCH_PASSWORD ? "YES" : "NO"
+                );
+
+                if (evt) {
+                    console.error(
+                        "Content-Type:",
+                        evt.getHeader("Content-Type") || "N/A"
+                    );
+
+                    console.error(
+                        "Modesl-Reply-OK:",
+                        evt.getHeader("Modesl-Reply-OK") || "N/A"
+                    );
+
+                    console.error(
+                        "Reply-Text:",
+                        evt.getHeader("Reply-Text") || "N/A"
+                    );
+                }
 
                 socket.destroy();
                 process.exit(1);
