@@ -210,8 +210,8 @@ async function main() {
                             "========================================"
                         );
 
-                        connection.disconnect();
-                        process.exit(0);
+                        console.log("");
+                        console.log("ESL connection is healthy. Keeping service alive...");
                     }
                 );
             }
