@@ -83,6 +83,6 @@ echo "================================"
 echo "Tailscale authentication successful"
 echo "================================"
 
-echo "Starting SOCKS5 → FreeSWITCH test..."
+echo "Starting Node Dialer..."
 
-exec node /app/tailscale-modesl-poc.js
+exec npm start

@@ -29,16 +29,36 @@ io.on("connection", (socket) => {
 
 });
 
-eslService.connect();
 
-setTimeout(() => {
+const startServer = async () => {
 
-    eventListener.startListener(io);
+    try {
 
-}, 2000);
+        await eslService.connect();
 
-server.listen(PORT, () => {
+        console.log("ESL connection ready.");
 
-    console.log(`Node Dialer running on port ${PORT}`);
+        eventListener.startListener(io);
 
-});
+        server.listen(PORT, () => {
+
+            console.log(
+                `Node Dialer running on port ${PORT}`
+            );
+
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Failed to start Node Dialer:",
+            error.message
+        );
+
+        process.exit(1);
+
+    }
+
+};
+
+startServer();
