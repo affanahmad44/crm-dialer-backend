@@ -1,5 +1,6 @@
 const { SocksClient } = require("socks");
 const { EventEmitter2 } = require("eventemitter2");
+const http = require("http");
 const modesl = require("modesl");
 const Parser = require("modesl/lib/esl/Parser");
 
@@ -11,6 +12,28 @@ const TARGET_PORT = 8021;
 
 const FREESWITCH_PASSWORD =
     process.env.FREESWITCH_PASSWORD;
+
+const PORT = process.env.PORT || 10000;
+
+const healthServer = http.createServer((req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "application/json"
+    });
+
+    res.end(JSON.stringify({
+        success: true,
+        service: "tailscale-esl-test",
+        tailscale: true,
+        esl: true
+    }));
+});
+
+healthServer.listen(PORT, "0.0.0.0", () => {
+    console.log("========================================");
+    console.log("HTTP HEALTH SERVER STARTED");
+    console.log("========================================");
+    console.log(`Listening on 0.0.0.0:${PORT}`);
+});
 
 function createInboundConnection(socket, password) {
     /*
