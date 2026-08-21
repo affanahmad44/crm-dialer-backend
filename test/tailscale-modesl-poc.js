@@ -10,7 +10,7 @@ const TARGET_HOST = "100.88.225.6";
 const TARGET_PORT = 8021;
 
 const FREESWITCH_PASSWORD =
-    process.env.FREESWITCH_PASSWORD || "ClueCon";
+    process.env.FREESWITCH_PASSWORD;
 
 function createInboundConnection(socket, password) {
     /*
