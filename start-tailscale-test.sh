@@ -85,4 +85,4 @@ echo "================================"
 
 echo "Starting SOCKS5 → FreeSWITCH test..."
 
-exec node /app/tailscale-esl-test.js
+exec node /app/tailscale-modesl-poc.js
